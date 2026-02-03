@@ -1,0 +1,4 @@
+.vagrant
+mynewclient.box
+mynewserver.box
+Vagrantfile
