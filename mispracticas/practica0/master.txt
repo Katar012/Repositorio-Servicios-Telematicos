@@ -1,0 +1,132 @@
+Comandos para maestro:
+
+DNS:
+sudo apt install bind9
+cd /etc/bind/
+nano named.conf.local
+
+SE PEGA ESTA CONFIGURACION:
+
+  GNU nano 6.2                    named.conf.local                              
+// Zona Directa
+zone "empresa.local"{
+        type master;
+        file "/etc/bind/db.empresa.local";
+        allow-transfer { 192.168.50.2; };
+        also-notify { 192.168.50.2; };
+};
+
+zone "cuero.com"{
+        type master;
+        file "/etc/bind/db.cuero.com";
+        allow-transfer { 192.168.50.2;  };
+};
+
+// Zona Inversa
+zone "50.168.192.in-addr.arpa" {
+        type master;
+        file "/etc/bind/db.192";
+        allow-transfer { 192.168.50.2; };
+        also-notify { 192.168.50.2; };
+};
+
+luego se continua con:
+nano db.empresa.local
+
+SE PEGA ESTO:
+
+$TTL 86400
+@   IN  SOA maestro.empresa.local. admin.empresa.local. (
+            2026030301 ; Serial (Formato: AAAAMMDDXX)
+            3600       ; Refresh
+            1800       ; Retry
+            604800     ; Expire
+            86400 )    ; Minimum TTL
+
+; Servidores DNS (NS)
+@       IN  NS  maestro.empresa.local.
+@       IN  NS  esclavo.empresa.local.
+
+; Registros A (IPv4) 
+maestro IN  A   192.168.50.3
+esclavo IN  A   192.168.50.2
+
+; Registros AAAA (IPv6) 
+maestro IN  AAAA 2001:db8:1::3
+esclavo IN  AAAA 2001:db8:1::2
+
+; Registro CNAME (Alias) 
+www     IN  CNAME maestro.empresa.local.
+
+luego se continua con:
+
+nano db.192
+
+SE PEGA ESTO:
+
+$TTL 86400
+@   IN  SOA maestro.empresa.local. admin.empresa.local. (
+            2026030301 ; Serial
+            3600       ; Refresh
+            1800       ; Retry
+            604800     ; Expire
+            86400 )    ; Minimum TTL
+
+; Servidores DNS
+@       IN  NS  maestro.empresa.local.
+@       IN  NS  esclavo.empresa.local.
+
+; Registros PTR (IP a Nombre) [cite: 47]
+3       IN  PTR maestro.empresa.local.
+2       IN  PTR esclavo.empresa.local.
+
+luego se checkea con:
+
+named-checkconf
+named-checkzone empresa.local /etc/bind/db.empresa.local
+
+
+apagaremos el maestro para verificar que el esclavo siga respondiendo
+systemctl stop bind9
+
+en el esclavo pondremos:
+
+dig maestro.empresa.local @192.168.50.2
+
+APACHE2:
+sudo apt install apache2
+sudo a2enmod deflate
+
+en etc/bind/db.empresa.local añadimos 
+parcial.cuero.com IN A 192.168.50.3
+
+en /etc/bind/ se añade db.cuero con el siguiente contenido
+
+  GNU nano 6.2                      db.cuero.com                                
+$TTL 86400
+@   IN  SOA maestro.empresa.local. admin.empresa.local. (
+            2026030301 ; Serial
+            3600 1800 604800 86400 )
+@       IN  NS  maestro.empresa.local.
+parcial IN  A   192.168.50.3
+
+en /var/www/html/ descargamos
+
+sudo wget -O logo.png https://www.google.com/images/branding/googlelogo/1x/googlelogo_color_272x92dp.png
+
+verificamos permisos para que se pueda leer 
+sudo chown www-data:www-data /var/www/html/logo.png
+
+verificamos que no se comprima desde el esclavo o host:
+curl -H "Accept-Encoding: gzip" -I http://parcial.cuero.com/logo.png
+
+
+por ultimo se añade en en /etc/hosts lo siguiente
+
+root@servidor:/etc# cat hosts
+127.0.0.1 localhost
+127.0.1.1 vagrant
+
+
+
+

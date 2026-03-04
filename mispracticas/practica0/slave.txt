@@ -1,0 +1,58 @@
+Comandos para esclavo:
+
+DNS:
+sudo apt install bind9
+cd /etc/bind/
+nano named.conf.local
+
+DONDE SE PEGA ESTA CONFIGURACION
+
+// Zona Directa
+zone "empresa.local"{
+        type slave;
+        file "/var/cache/bind/db.empresa.local";
+        masters { 192.168.50.3; };
+};
+
+// Zona Inversa
+zone "50.168.192.in-addr.arpa"{ 
+        type slave;
+        file "/var/cache/bind/db.192";
+        masters { 192.168.50.3; };
+};
+
+luego se le dan permisos a bind9 para escribir en /var/cache/bind/
+esto crea los archivos que vienen del maestro
+
+chown bind:bind /var/cache/bind/
+chmod 775 /var/cache/bind/
+
+systemctl restart bind9, tanto en maestro como esclavo
+
+al ubicarnos en:
+root@cliente:/etc/bind# cd /var/cache/bind/
+
+deben aparecer los archivos del maestro:
+root@cliente:/var/cache/bind# ls
+db.192  db.empresa.local  managed-keys.bind  managed-keys.bind.jnl
+
+dig google.com @192.168.50.2 debe rechazar
+
+APACHE2:
+
+con gzip: curl -H "Accept-Encoding: gzip" -I http://parcial.cuero.com
+sin gzip: curl -I http://parcial.cuero.com
+
+por ultimo se añade en /etc/hosts lo siguiente
+
+root@servidor:/etc# cat hosts
+127.0.0.1 localhost
+127.0.1.1 vagrant
+
+
+
+
+
+
+
+
