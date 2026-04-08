@@ -1,0 +1,139 @@
+PARTE1:
+--------------------------------------------
+SERVIDOR1:
+
+sudo ufw status verbose
+sudo ufw delete allow 21/tcp
+sudo ufw route delete allow in on eth1 out on eth2 to 192.168.50.2 port 21 proto tcp
+sudo ufw status verbose
+sudo ufw allow 21/tcp
+sudo ufw route allow in on eth1 out on eth2 to 192.168.50.2 port 21 proto tcp
+sudo ufw status verbose
+
+SERVIDOR2:
+sudo systemctl status vsftpd --no-pager
+sudo grep -E 'ssl_enable|rsa_cert_file|rsa_private_key_file|pasv_min_port|pasv_max_port|pasv_address' /etc/vsftpd.conf
+
+CLIENTE:
+nc -vz -w 3 192.168.60.3 21
+nc -vz -w 3 192.168.60.3 21
+nc -vz -w 3 192.168.60.3 21
+openssl s_client -connect 192.168.60.3:21 -starttls ftp
+
+PARTE2:
+----------------------------------------------------------
+CLIENTE:
+
+cat /etc/systemd/resolved.conf
+resolvectl status
+dig google.com
+dig openai.com
+dig uao.edu.co
+sudo tcpdump -i eth0 -w /vagrant/dot-853.pcap tcp port 853 &
+dig google.com
+sudo killall tcpdump
+sudo sed -i 's/^DNSOverTLS=yes/DNSOverTLS=no/' /etc/systemd/resolved.conf
+sudo systemctl restart systemd-resolved
+sudo resolvectl flush-caches
+cat /etc/systemd/resolved.conf
+sudo tcpdump -i eth0 -w /vagrant/dns-53.pcap 'udp port 53 or tcp port 53'
+resolvectl query google.com
+sudo sed -i 's/^DNSOverTLS=no/DNSOverTLS=yes/' /etc/systemd/resolved.conf
+sudo systemctl restart systemd-resolved
+resolvectl status
+
+PARTE3:
+---------------------------------------------------------
+SERVIDOR1:
+
+grep -n '^Subsystem' /etc/ssh/sshd_config
+sudo systemctl status ssh --no-pager
+cat /etc/ssh/sshd_config
+sudo ufw status verbose
+sudo ufw delete allow 22/tcp
+sudo ufw status verbose
+sudo ufw allow 22/tcp
+sudo ufw status verbose
+
+CLIENTE:
+
+sftp -o ConnectTimeout=5 marin@192.168.60.3
+sftp marin@192.168.60.3
+echo "hola desde cliente sftp" > /home/vagrant/subida_sftp.txt
+sftp marin@192.168.60.3
+ls
+put /home/vagrant/subida_sftp.txt
+ls
+get subida_sftp.txt /home/vagrant/bajada_sftp.txt
+bye
+ls -l /home/vagrant/bajada_sftp.txt
+cat /home/vagrant/bajada_sftp.txt
+sudo tcpdump -i any -w /vagrant/sftp-22.pcap tcp port 22
+echo "segunda prueba sftp" > /home/vagrant/subida_sftp_2.txt
+sftp marin@192.168.60.3
+ls
+put /home/vagrant/subida_sftp_2.txt
+get subida_sftp_2.txt /home/vagrant/bajada_sftp_2.txt
+bye
+
+VAGRANTFILE:
+--------------------------------------------------
+Vagrant.configure("2") do |config|
+  config.vm.box = "bento/ubuntu-22.04"
+
+  common_packages = <<-SHELL
+    apt-get update
+    DEBIAN_FRONTEND=noninteractive apt-get install -y \
+      net-tools curl wget dnsutils iproute2 tcpdump ca-certificates
+  SHELL
+
+  config.vm.define "servidor1" do |srv1|
+    srv1.vm.hostname = "servidor1"
+
+    # Red "publica" del laboratorio: cliente <-> servidor1
+    srv1.vm.network "private_network", ip: "192.168.60.3"
+
+    # Red interna backend: servidor1 <-> servidor2
+    srv1.vm.network "private_network", ip: "192.168.50.3", virtualbox__intnet: "backendnet"
+
+    srv1.vm.provider "virtualbox" do |vb|
+      vb.name = "parcial-servidor1"
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+
+    srv1.vm.provision "shell", inline: common_packages
+    srv1.vm.provision "shell", inline: "apt-get install -y ufw openssh-server"
+  end
+
+  config.vm.define "servidor2" do |srv2|
+    srv2.vm.hostname = "servidor2"
+
+    # Solo backend, no debe quedar expuesto directamente al cliente
+    srv2.vm.network "private_network", ip: "192.168.50.2", virtualbox__intnet: "backendnet"
+
+    srv2.vm.provider "virtualbox" do |vb|
+      vb.name = "parcial-servidor2"
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+
+    srv2.vm.provision "shell", inline: common_packages
+    srv2.vm.provision "shell", inline: "apt-get install -y vsftpd openssl"
+  end
+
+  config.vm.define "cliente" do |cli|
+    cli.vm.hostname = "cliente"
+
+    cli.vm.network "private_network", ip: "192.168.60.2"
+
+    cli.vm.provider "virtualbox" do |vb|
+      vb.name = "parcial-cliente"
+      vb.memory = 1024
+      vb.cpus = 1
+    end
+
+    cli.vm.provision "shell", inline: common_packages
+    cli.vm.provision "shell", inline: "apt-get install -y openssl lftp"
+  end
+end
